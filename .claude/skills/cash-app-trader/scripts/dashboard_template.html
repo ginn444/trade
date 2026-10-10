@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock Trade Desk</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --ink: #14171a; --muted: #5f6b76; --line: #e3e7eb;
+  --up: #0a8f4f; --down: #d0342c; --stop: #d0342c; --target: #0a8f4f; --accent: #2457d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1114; --card: #171b20; --ink: #e9edf1; --muted: #93a0ab; --line: #2a3138;
+    --up: #2fd17f; --down: #ff6b61; --stop: #ff6b61; --target: #2fd17f; --accent: #7aa2ff;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1114; --card: #171b20; --ink: #e9edf1; --muted: #93a0ab; --line: #2a3138;
+  --up: #2fd17f; --down: #ff6b61; --stop: #ff6b61; --target: #2fd17f; --accent: #7aa2ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+h1 { font-size: 22px; margin: 0; }
+.note { color: var(--muted); font-size: 13px; }
+.banner { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--card);
+  border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.banner b { color: var(--down); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.kpi .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+  opacity: 0; transform: translateY(12px); animation: rise .6s ease forwards; }
+@keyframes rise { to { opacity: 1; transform: none; } }
+.top { display: flex; justify-content: space-between; align-items: baseline; }
+.tk { font-weight: 700; font-size: 18px; }
+.px { font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+.chg { font-size: 13px; font-variant-numeric: tabular-nums; }
+canvas { width: 100%; height: 150px; display: block; margin: 8px 0; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; border-top: 2px dashed; vertical-align: middle; margin-right: 4px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; margin-top: 8px; }
+.stats span:nth-child(odd) { color: var(--muted); }
+.stats span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+.gauge { margin-top: 10px; }
+.gauge .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.gauge .fill { height: 100%; width: 0; border-radius: 4px; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+.gauge .lab { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.ticket { margin-top: 10px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 13px; }
+.up { color: var(--up); } .down { color: var(--down); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Stock Trade Desk</h1>
+    <span class="note" id="asof"></span>
+  </header>
+  <div class="banner" id="banner">Claude preps these ideas; <b>you</b> place every order yourself in Cash App. Not financial advice.</div>
+  <section class="kpis" id="kpis"></section>
+  <section class="grid" id="grid"></section>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
+const usd = v => "$" + Number(v).toFixed(2);
+
+if (DATA.demo) document.getElementById("banner").innerHTML += " <b>DEMO DATA — prices are synthetic.</b>";
+document.getElementById("asof").textContent = "Built " + new Date().toLocaleString();
+
+// Count-up animation for numbers.
+function countUp(el, to, fmt, ms = 900) {
+  const t0 = performance.now();
+  (function step(t) {
+    const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmt(to * e);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+// Portfolio KPIs.
+const led = DATA.ledger;
+const kpis = document.getElementById("kpis");
+function kpi(label, value, fmt, cls = "") {
+  const k = $("div", "kpi"), v = $("div", "v " + cls), l = $("div", "l", label);
+  k.append(v, l); kpis.append(k); countUp(v, value, fmt);
+}
+if (led) {
+  let held = 0;
+  for (const c of DATA.cards) if (c.holding) held += c.holding.shares * c.m.price;
+  const total = led.cash + held, pnl = total - led.start_cash;
+  kpi("Account value", total, usd);
+  kpi("Cash to invest", led.cash, usd);
+  kpi("P&L since start", pnl, v => (v >= 0 ? "+" : "-") + usd(Math.abs(v)), pnl >= 0 ? "up" : "down");
+  kpi("Pending tickets", led.tickets.filter(t => t.status === "pending").length, v => Math.round(v));
+} else {
+  kpi("Budget", 10, usd);
+}
+
+// Animated chart: line draws left-to-right, then stop/target bands fade in, last price pulses.
+function drawChart(cv, closes, m) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr);
+  const lo = Math.min(...closes, m.stop) * 0.99, hi = Math.max(...closes, m.target) * 1.01;
+  const x = i => 4 + (i / (closes.length - 1)) * (W - 8), y = v => H - 6 - ((v - lo) / (hi - lo)) * (H - 12);
+  const up = closes.at(-1) >= closes[0], col = css(up ? "--up" : "--down");
+  const t0 = performance.now(), DRAW = 1400;
+  function frame(t) {
+    const k = Math.min(1, (t - t0) / DRAW), n = Math.max(2, Math.floor(k * closes.length));
+    g.clearRect(0, 0, W, H);
+    const fade = Math.max(0, (t - t0 - DRAW * 0.6) / 600);
+    g.globalAlpha = Math.min(1, fade);
+    for (const [v, c] of [[m.stop, "--stop"], [m.target, "--target"]]) {
+      g.strokeStyle = css(c); g.setLineDash([5, 4]); g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(0, y(v)); g.lineTo(W, y(v)); g.stroke();
+    }
+    g.setLineDash([]); g.globalAlpha = 1;
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, col + "44"); grad.addColorStop(1, col + "00");
+    g.beginPath(); g.moveTo(x(0), y(closes[0]));
+    for (let i = 1; i < n; i++) g.lineTo(x(i), y(closes[i]));
+    g.strokeStyle = col; g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
+    g.lineTo(x(n - 1), H); g.lineTo(x(0), H); g.closePath(); g.fillStyle = grad; g.fill();
+    // Pulsing dot at the head of the line.
+    const r = 3 + (k === 1 ? 2 * Math.abs(Math.sin(t / 400)) : 0);
+    g.beginPath(); g.arc(x(n - 1), y(closes[n - 1]), r, 0, 7); g.fillStyle = col; g.fill();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+const RISK_COL = { low: "--up", medium: "--accent", high: "--down" };
+const grid = document.getElementById("grid");
+DATA.cards.forEach((c, i) => {
+  const m = c.m, chg = (c.closes.at(-1) / c.closes[0] - 1) * 100;
+  const card = $("article", "card"); card.style.animationDelay = i * 120 + "ms";
+  const top = $("div", "top");
+  const px = $("span", "px");
+  top.append($("span", "tk", c.ticker), px);
+  const chgEl = $("div", "chg " + (chg >= 0 ? "up" : "down"),
+    (chg >= 0 ? "▲ " : "▼ ") + Math.abs(chg).toFixed(1) + "% over " + c.closes.length + " days");
+  const cv = $("canvas");
+  const legend = $("div", "legend",
+    `<span><i style="border-color:var(--stop)"></i>Stop ${usd(m.stop)}</span><span><i style="border-color:var(--target)"></i>Target ${usd(m.target)}</span>`);
+  const stats = $("div", "stats", [
+    ["Volatility", m.ann_vol_pct + "%/yr"], ["Max drawdown", m.max_drawdown_pct + "%"],
+    ["1-day VaR (95%)", usd(m.var95_1day_dollars)], ["Reward : risk", m.reward_risk + " : 1"],
+    ["20d / 50d avg", usd(m.sma20) + " / " + usd(m.sma50)], ["1-month", m.ret_1m_pct + "%"],
+  ].map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join(""));
+  const volPct = Math.min(100, m.ann_vol_pct / 80 * 100);
+  const gauge = $("div", "gauge", `<div class="bar"><div class="fill"></div></div>
+    <div class="lab"><span>Risk: ${m.risk_level}</span><span>${m.ann_vol_pct}% vol</span></div>`);
+  const ticket = c.holding
+    ? $("div", "ticket", `Holding ${c.holding.shares.toFixed(5)} sh · cost ${usd(c.holding.cost)} · value ${usd(c.holding.shares * m.price)}`)
+    : $("div", "ticket", `Idea: buy <b>${usd(m.invest_dollars)}</b> of ${c.ticker} · loss at stop ≈ ${usd(m.loss_at_stop)}`);
+  card.append(top, chgEl, cv, legend, stats, gauge, ticket);
+  grid.append(card);
+  countUp(px, m.price, usd, 1400);
+  drawChart(cv, c.closes, m);
+  const fill = gauge.querySelector(".fill");
+  fill.style.background = css(RISK_COL[m.risk_level]);
+  setTimeout(() => fill.style.width = volPct + "%", 300 + i * 120);
+});
+</script>
+</body>
+</html>
