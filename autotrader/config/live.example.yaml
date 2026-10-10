@@ -1,0 +1,14 @@
+# Example LIVE configuration overlay. Copy to config/live.yaml, review every line, then run:
+#   autotrader authorize-live --config config/live.yaml
+# The authorization is bound to the SHA-256 of the merged config; any later edit invalidates it.
+trading:
+  mode: live
+live:
+  enabled: true
+  authorization_ttl_hours: 24
+  risk:
+    max_risk_per_trade_pct: 0.25
+    max_daily_loss_pct: 1.0
+    max_open_positions: 2
+    max_position_notional_pct: 10.0
+    max_orders_per_day: 10

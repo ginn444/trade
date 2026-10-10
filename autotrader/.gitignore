@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+state/
+*.db
+*.db-journal
+reports/
+__pycache__/
+*.egg-info/
+.pytest_cache/

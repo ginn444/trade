@@ -1,0 +1,19 @@
+# Paper trading by default. `docker compose up -d` starts the bot and the dashboard.
+services:
+  bot:
+    build: .
+    command: ["run"]
+    env_file: .env
+    environment:
+      AUTOTRADER_MODE: paper            # mock | paper  (live can only be set in an authorized config file)
+    volumes: ["./state:/app/state", "./reports:/app/reports"]
+    restart: unless-stopped
+  dashboard:
+    build: .
+    command: ["--config", "config/docker.yaml", "dashboard"]
+    env_file: .env
+    environment:
+      AUTOTRADER_MODE: paper
+    volumes: ["./state:/app/state", "./reports:/app/reports"]
+    ports: ["127.0.0.1:8080:8080"]      # published on localhost only
+    restart: unless-stopped

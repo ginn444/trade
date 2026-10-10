@@ -1,0 +1,137 @@
+# autotrader default configuration — conservative PAPER-trading settings.
+# Every risk parameter here is enforced by the deterministic risk engine (src/autotrader/risk/engine.py).
+# Claude's output can never loosen these limits.
+
+trading:
+  # mock  = synthetic data + simulated broker (no network, clearly labeled, for demos/tests)
+  # paper = Alpaca paper-trading API (simulated money)
+  # live  = real money. Requires live.enabled=true AND a valid authorization file (see `autotrader authorize-live`).
+  mode: paper
+  loop_interval_seconds: 30
+  open_delay_minutes: 5          # wait after the open before entering (avoid opening auction noise)
+  new_entry_cutoff: "15:30"      # America/New_York; no new positions after this time
+  flatten_intraday_at: "15:50"   # intraday-only strategies are flattened at this time
+  timezone: America/New_York
+
+universe:
+  stocks: [SPY, QQQ, IWM, AAPL, MSFT, NVDA, AMZN, META, GOOGL, AMD, TSLA, JPM, XLF, XLE]
+  min_avg_dollar_volume: 50000000   # 20-day average dollar volume
+  min_price: 10.0
+  options_enabled: true
+  options_underlyings: [SPY, QQQ, IWM, AAPL, MSFT, NVDA, AMZN, META]
+
+data:
+  stock_feed: iex          # iex is free; use sip if your Alpaca plan includes it
+  options_feed: indicative # indicative is free; opra requires a subscription
+  max_quote_age_seconds: 60
+  max_bar_age_minutes: 30
+  daily_lookback_days: 300
+  intraday_timeframe_minutes: 5
+
+risk:
+  max_risk_per_trade_pct: 0.5        # % of equity at risk per trade (stop distance x size, incl. slippage)
+  max_daily_loss_pct: 2.0            # realized + unrealized vs. start-of-day equity
+  max_open_positions: 3
+  max_position_notional_pct: 20.0    # cap any single position's notional at this % of equity
+  min_reward_risk: 1.5
+  allow_averaging_down: false        # hard-coded false in the engine; config cannot enable it
+  max_spread_pct_stock: 0.15         # bid/ask spread as % of mid
+  max_spread_pct_option: 8.0
+  min_option_open_interest: 500
+  min_option_volume: 50
+  option_dte_min: 7
+  option_dte_max: 45
+  scalp_dte_min: 1
+  scalp_dte_max: 7
+  option_delta_min: 0.30
+  option_delta_max: 0.65
+  # For options, assume the ENTIRE premium can be lost (gaps / stops filling far worse than expected).
+  options_risk_full_premium: true
+  stop_slippage_pct_stock: 0.25      # extra adverse slippage assumed on stock stops (% of price)
+  duplicate_signal_window_minutes: 60
+  max_orders_per_day: 20
+  halt_on_reconcile_mismatch: true
+  min_buying_power_buffer_pct: 10.0
+
+broker_health:
+  max_consecutive_errors: 3
+  error_window_seconds: 300
+  max_errors_in_window: 5
+  max_latency_seconds: 5.0
+  recovery_successes_required: 3
+
+execution:
+  entry_order_type: limit            # limit at mid (+ small offset); never market for options entries
+  limit_offset_pct: 0.05             # % of price added (buy) / subtracted (sell) for marketable limits
+  entry_timeout_seconds: 120         # cancel unfilled entries after this
+  option_exit_aggressive_after_seconds: 30
+  use_bracket_for_stocks: true       # broker-side stop/target for equities
+
+ai:
+  enabled: true
+  model: claude-opus-5-5
+  effort: medium
+  max_tokens: 16000
+  timeout_seconds: 90
+  use_server_fallbacks: true
+  max_candidates_per_cycle: 5
+  # If Claude is unavailable, trade deterministic signals only (still risk-checked) or skip.
+  on_ai_unavailable: skip            # skip | deterministic
+
+strategies:
+  enabled: [stock_momentum, stock_breakout, stock_reversal, option_momentum, option_breakout, option_reversal,
+            option_debit_spread, option_volatility, option_scalp]
+  require_validation: true           # only strategies that PASSED backtest validation may trade
+  validation_file: state/strategy_approvals.json
+
+backtest:
+  initial_equity: 100000
+  stock_commission_per_share: 0.0
+  stock_slippage_bps: 5
+  stock_spread_bps: 3
+  option_commission_per_contract: 0.0
+  option_regulatory_fee_per_contract: 0.05   # ORF/OCC/TAF approximation
+  option_half_spread_pct: 4.0                # modeled half-spread as % of option price
+  option_slippage_pct: 1.0
+  option_iv_premium: 1.10                    # modeled IV = realized vol x premium (model, not real chain data)
+  walk_forward_train_bars: 252
+  walk_forward_test_bars: 63
+  walk_forward_train_bars_intraday: 1560   # 20 sessions of 5-minute bars
+  walk_forward_test_bars_intraday: 390     # 5 sessions
+  intraday_history_days: 120
+  acceptance:
+    min_trades: 30
+    min_profit_factor: 1.2
+    max_drawdown_pct: 20.0
+    min_expectancy_r: 0.05
+    min_sharpe: 0.5
+    min_positive_wf_windows_frac: 0.5
+    require_beat_benchmark_sharpe: false
+    max_oos_degradation: 0.6   # OOS sharpe must be >= (1-x) * in-sample sharpe
+
+storage:
+  database_url: sqlite:///state/autotrader.db
+  state_dir: state
+  reports_dir: reports
+  log_dir: state/logs
+
+dashboard:
+  host: 127.0.0.1
+  port: 8080
+
+live:
+  # Live trading is OFF. Turning it on requires ALL of:
+  #  1. live.enabled: true in a dedicated live config file
+  #  2. ALPACA_LIVE_API_KEY / ALPACA_LIVE_SECRET_KEY set (distinct from paper keys)
+  #  3. `autotrader authorize-live --config <file>` run interactively, producing an authorization
+  #     bound to the hash of this config and expiring after `authorization_ttl_hours`.
+  enabled: false
+  authorization_file: state/live_authorization.json
+  authorization_ttl_hours: 24
+  # Independent (tighter) limits applied IN ADDITION to `risk` when mode=live.
+  risk:
+    max_risk_per_trade_pct: 0.25
+    max_daily_loss_pct: 1.0
+    max_open_positions: 2
+    max_position_notional_pct: 10.0
+    max_orders_per_day: 10
