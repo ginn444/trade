@@ -6,3 +6,9 @@ builds an animated chart dashboard, and preps order tickets that **you** place i
 Cash App has no public trading API, so Claude never holds money or places orders. Not financial advice.
 
 Ask Claude things like "find me trades for my $10", "how risky is NVDA?", or "show my dashboard".
+
+## autotrader (`autotrader/`)
+
+An autonomous, risk-gated stock & options trading bot for **Alpaca** (paper by default) with Claude as an
+analysis layer and a deterministic risk engine, plus backtesting/walk-forward validation and a live dashboard.
+See [`autotrader/README.md`](autotrader/README.md).

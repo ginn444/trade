@@ -1,0 +1,17 @@
+# systemd unit (bare-metal alternative to docker). Adjust paths/user, then:
+#   sudo cp deploy/autotrader.service /etc/systemd/system/ && sudo systemctl enable --now autotrader
+[Unit]
+Description=autotrader (paper trading)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/autotrader
+EnvironmentFile=/opt/autotrader/.env
+ExecStart=/opt/autotrader/.venv/bin/autotrader run
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
